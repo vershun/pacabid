@@ -9,24 +9,51 @@ import (
 	"github.com/alpacahq/alpaca-trade-api-go/common"
 )
 
+type side string
+type orderType string
+
+const (
+	buy    = side("buy")
+	sell   = side("sell")
+	limit  = orderType("sell")
+	market = orderType("sell")
+)
+
 type pacabid struct {
-	client     *alpaca.Client
-	strategies *strategies
+	client       *alpaca.Client
+	strategies   []tradingStrategy
+	orderQueue   chan order
+	marketStream chan bar
+	quit         chan struct{}
+}
+
+type bar struct {
+	time   int64
+	open   float32
+	high   float32
+	low    float32
+	close  float32
+	volume int32
+}
+
+type order struct {
+	strategyName string
+	symbol       string
+	quantity     int
+	side         side
 }
 
 type strategies struct {
-	strategies []tradingStrategy
 }
 
 type tradingStrategy interface {
+	symbolsToWatch() []string
+	prepare(budget float64, marketStream <-chan bar, orders chan<- order)
 	run() error
-	setWeight(weight int)
-	weight() int
 }
 
 type strategy struct {
-	weight      int
-	percOfTotal float64
+	budgetMicros int64
 }
 
 /*
@@ -43,7 +70,7 @@ func (ss *strategies) rebalance() {
 */
 
 func (p *pacabid) exitAllPositions() error {
-	open, until, limit := "open", time.Now(), 100
+	open, until, limit := "open", time.Now(), 1000
 	orders, err := p.client.ListOrders(&open, &until, &limit, nil)
 	if err != nil {
 		return fmt.Errorf("could not list orders: %s", err)
@@ -70,15 +97,21 @@ func (p *pacabid) waitToStart() error {
 		fmt.Printf("%d minutes until next market open.\n", timeToOpen)
 		time.Sleep((timeToOpen/2 + 1) * time.Minute)
 	}
-	fmt.Println("Market is open! Starting pacabid.")
+	fmt.Println("Market is open!")
 
 	return nil
 }
 
-func main() {
-	pb := &pacabid{
-		client: alpaca.NewClient(common.Credentials()),
+func newPacabid() *pacabid {
+	return &pacabid{
+		client:     alpaca.NewClient(common.Credentials()),
+		orderQueue: make(chan order, 100),
+		quit:       make(chan struct{}),
 	}
+}
+
+func main() {
+	pb := newPacabid()
 
 	if err := pb.exitAllPositions(); err != nil {
 		log.Fatal("Failed to exit all positions:", err)
