@@ -37,3 +37,8 @@ func (mr *meanRevision) handleUpdate(update *bar) error {
 
 	return nil
 }
+
+func lwma(bars []*bar, alpha float64) float64 {
+
+	return 0
+}
