@@ -32,7 +32,7 @@ type Position struct {
 	ID           string
 	Symbol       string
 	Exchange     string
-	Num          int
+	Quantity     int
 	Side         Side
 	MarketValue  float64
 	CurrentPrice float64
