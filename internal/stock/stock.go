@@ -2,11 +2,11 @@ package stock
 
 // Bar contains the information necessary to draw a bar in a bar chart.
 type Bar struct {
-	Time   int64
-	Open   float64
+	Close  float64
 	High   float64
 	Low    float64
-	Close  float64
+	Open   float64
+	Time   int64
 	Volume int32
 }
 
@@ -29,11 +29,11 @@ type Order struct {
 }
 
 type Position struct {
-	ID           string
-	Symbol       string
+	CurrentPrice float64
 	Exchange     string
+	ID           string
+	MarketValue  float64
 	Quantity     int
 	Side         Side
-	MarketValue  float64
-	CurrentPrice float64
+	Symbol       string
 }

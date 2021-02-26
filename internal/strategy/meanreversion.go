@@ -118,17 +118,6 @@ func (mr *MeanRevision) submitLimitOrder(symbol string, qty int, price float64, 
 	}
 	fmt.Printf("Limit order of | %d %s %s | sent.\n", qty, symbol, side)
 	return nil
-	/*
-		order, err := alp.client.PlaceOrder(alpaca.PlaceOrderRequest{
-			AccountID:   account.ID,
-			AssetKey:    &symbol,
-			Qty:         decimal.NewFromFloat(float64(qty)),
-			Side:        adjSide,
-			Type:        "limit",
-			LimitPrice:  &limPrice,
-			TimeInForce: "day",
-		})
-	*/
 }
 
 // Submit a market order if quantity is above 0.
@@ -143,24 +132,6 @@ func (mr *MeanRevision) submitMarketOrder(symbol string, qty int, side stock.Sid
 	}
 	fmt.Printf("Market order of | %d %s %s | sent.\n", qty, symbol, side)
 	return nil
-	/*
-		lastOrder, err := alp.client.PlaceOrder(alpaca.PlaceOrderRequest{
-			AccountID:   account.ID,
-			AssetKey:    &symbol,
-			Qty:         decimal.NewFromFloat(float64(qty)),
-			Side:        adjSide,
-			Type:        "market",
-			TimeInForce: "day",
-		})
-		if err == nil {
-			fmt.Printf("Market order of | %d %s %s | completed.\n", qty, symbol, side)
-		} else {
-			fmt.Printf("Order of | %d %s %s | did not go through.\n", qty, symbol, side)
-		}
-		return err
-		fmt.Printf("Quantity is <= 0, order of | %d %s %s | not sent.\n", qty, symbol, side)
-		return nil
-	*/
 }
 
 /*
