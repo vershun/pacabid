@@ -2,7 +2,6 @@ package broker
 
 import (
 	"fmt"
-	"log"
 	"pacabid/internal/stock"
 	"time"
 
@@ -14,21 +13,6 @@ import (
 type alpaca struct {
 	client *alp.Client
 }
-
-/*
-type Client interface {
-	CancelOrder(orderID string) error
-	ExitAllPositions() error
-	GetAccount() (*Account, error)
-	GetPosition(symbol string) (*stock.Position, error)
-	GetAllPositions() ([]*stock.Position, error)
-	GetSymbolBars(symbol string, numMinutes int) ([]*stock.Bar, error)
-	ListOrders(orderType stock.OrderType, until time.Time) ([]*stock.Order, error)
-	SubmitMarketOrder(symbol string, quantity int, side stock.Side) error
-	SubmitLimitOrder(symbol string, quantity int, price float64, side stock.Side) error
-	WaitForMarket() error
-}
-*/
 
 func NewAlpaca() *alpaca {
 	alp.SetBaseUrl("https://paper-api.alpaca.markets")
@@ -51,26 +35,18 @@ func (a *alpaca) ExitAllPositions() error {
 	return nil
 }
 
-func (a *alpaca) WaitToStart() error {
-	log.Println("Waiting for market to open.")
-	for {
-		clock, err := a.client.GetClock()
-		if err != nil {
-			return err
-		}
-		if clock.IsOpen {
-			break
-		}
-		timeToOpen := time.Duration(clock.NextOpen.Sub(clock.Timestamp).Minutes())
-		log.Printf("%d minutes until next market open.\n", timeToOpen)
-		time.Sleep((timeToOpen/2 + 1) * time.Minute)
+func (a *alpaca) TimeUntilMarketOpen() (time.Duration, error) {
+	clock, err := a.client.GetClock()
+	if err != nil {
+		return 0, err
 	}
-	log.Println("Market is open!")
-
-	return nil
+	if clock.IsOpen {
+		return 0, nil
+	}
+	return clock.NextOpen.Sub(clock.Timestamp), nil
 }
 
-func (a *alpaca) toBar(alpBar *alp.Bar) *stock.Bar {
+func toBar(alpBar *alp.Bar) *stock.Bar {
 	if alpBar == nil {
 		return nil
 	}
@@ -84,7 +60,7 @@ func (a *alpaca) toBar(alpBar *alp.Bar) *stock.Bar {
 	}
 }
 
-func (a *alpaca) toPosition(alpPos *alp.Position) *stock.Position {
+func toPosition(alpPos *alp.Position) *stock.Position {
 	if alpPos == nil {
 		return nil
 	}
@@ -110,25 +86,43 @@ func (a *alpaca) GetSymbolBars(symbol string, numMinutes int) ([]*stock.Bar, err
 	}
 	var bars []*stock.Bar
 	for _, b := range alpBars {
-		bars = append(bars, a.toBar(&b))
+		bars = append(bars, toBar(&b))
 	}
 	return bars, nil
 }
 
 func (a *alpaca) GetPositions() ([]*stock.Position, error) {
-	alpPos, err := alp.client.GetPosition(alpacaClient.stock)
-	panic("implement")
-	return nil, nil
+	ps, err := a.client.ListPositions()
+	if err != nil {
+		return nil, err
+	}
+	var positions []*stock.Position
+	for _, p := range ps {
+		positions = append(positions, toPosition(&p))
+	}
+	return positions, nil
 }
 
 func (a *alpaca) GetPosition(symbol string) (*stock.Position, error) {
-	alpPos, err := alp.client.GetPosition(alpacaClient.stock)
-	panic("implement")
-	return nil, nil
+	p, err := a.client.GetPosition(symbol)
+	if err != nil {
+		return nil, err
+	}
+	return toPosition(p), nil
 }
 
 func (a *alpaca) ListOrders(orderType stock.OrderType, until time.Time) ([]*stock.Order, error) {
-	panic("implement")
+	status, limit := "open", 1000
+	os, _ := a.client.ListOrders(&status, &until, &limit, nil)
+	var orders []*stock.Order
+	for _, o := range os {
+		orders = append(orders, &stock.Order{
+			Quantity: int(o.Qty.IntPart()),
+			Side:     stock.Side(o.Side),
+			Symbol:   o.Symbol,
+		})
+	}
+	return orders, nil
 }
 
 func (a *alpaca) GetAccount() (*Account, error) {
@@ -184,4 +178,8 @@ func (a *alpaca) SubmitLimitOrder(symbol string, quantity int, price float64, si
 		return "", err
 	}
 	return ord.ID, nil
+}
+
+func (a *alpaca) CancelOrder(orderID string) error {
+	return a.client.CancelOrder(orderID)
 }

@@ -8,22 +8,31 @@ import (
 	"time"
 )
 
-const numBars = 25
-
-type MeanRevision struct {
-	budget       float64
-	targetSymbol string
+type MeanReversion struct {
 	client       broker.Client
+	budget       float64
+	numBars      int
+	targetSymbol string
 
 	lastOrder string
 }
 
-func (mr *MeanRevision) Prepare(budget float64, client broker.Client) {
+func NewMeanReversion(symbol string, numBars int) *MeanReversion {
+	return &MeanReversion{
+		targetSymbol: symbol,
+		numBars:      numBars,
+	}
+}
+
+func (mr *MeanReversion) Prepare(budget float64, client broker.Client) {
 	mr.budget = budget
 	mr.client = client
 }
 
-func (mr *MeanRevision) Run(quit chan struct{}) error {
+func (mr *MeanReversion) Run(quit chan struct{}) error {
+	if err := mr.client.ExitAllPositions(); err != nil {
+		return fmt.Errorf("failed to exit all positions: %s", err)
+	}
 	t := time.NewTicker(time.Minute)
 	defer t.Stop()
 	for {
@@ -38,7 +47,25 @@ func (mr *MeanRevision) Run(quit chan struct{}) error {
 	}
 }
 
-func (mr *MeanRevision) update() error {
+func (mr *MeanReversion) update() error {
+	d, err := mr.client.TimeUntilMarketOpen()
+	if err != nil {
+		return err
+	}
+	if d > 0 {
+		log.Printf("%d minutes until next market open.\n", int(d.Minutes()))
+		return nil
+	}
+
+	bars, err := mr.client.GetSymbolBars(mr.targetSymbol, mr.numBars)
+	if err != nil {
+		return err
+	}
+	if len(bars) < mr.numBars {
+		log.Printf("Waiting for %d more minutes to accumulate data.\n", mr.numBars-len(bars))
+		return nil
+	}
+
 	positionCount := 0
 	positionVal := 0.0
 	position, err := mr.client.GetPosition(mr.targetSymbol)
@@ -49,16 +76,11 @@ func (mr *MeanRevision) update() error {
 		positionCount = position.Quantity
 		positionVal = position.MarketValue
 	}
-
-	bars, err := mr.client.GetSymbolBars(mr.targetSymbol, numBars)
-	if err != nil {
-		return err
-	}
 	meanPrice := 0.0
 	for _, b := range bars {
 		meanPrice += float64(b.Close)
 	}
-	meanPrice /= float64(numBars)
+	meanPrice /= float64(mr.numBars)
 	curPrice := bars[len(bars)-1].Close
 
 	if curPrice > meanPrice {
@@ -73,7 +95,7 @@ func (mr *MeanRevision) update() error {
 		if err != nil {
 			return err
 		}
-		positions, err := mr.client.GetAllPositions()
+		positions, err := mr.client.GetPositions()
 		if err != nil {
 			return err
 		}
@@ -107,12 +129,12 @@ func (mr *MeanRevision) update() error {
 }
 
 // Submit a limit order if quantity is above 0.
-func (mr *MeanRevision) submitLimitOrder(symbol string, qty int, price float64, side stock.Side) error {
+func (mr *MeanReversion) submitLimitOrder(symbol string, qty int, price float64, side stock.Side) error {
 	if qty <= 0 {
 		log.Printf("Order of | %d %s %s | not sent.", qty, symbol, side)
 		return nil
 	}
-	if err := mr.client.SubmitLimitOrder(symbol, qty, price, side); err != nil {
+	if _, err := mr.client.SubmitLimitOrder(symbol, qty, price, side); err != nil {
 		fmt.Printf("Order of | %d %s %s | did not go through.\n", qty, symbol, side)
 		return err
 	}
@@ -121,12 +143,12 @@ func (mr *MeanRevision) submitLimitOrder(symbol string, qty int, price float64, 
 }
 
 // Submit a market order if quantity is above 0.
-func (mr *MeanRevision) submitMarketOrder(symbol string, qty int, side stock.Side) error {
+func (mr *MeanReversion) submitMarketOrder(symbol string, qty int, side stock.Side) error {
 	if qty <= 0 {
 		log.Printf("Order of | %d %s %s | not sent.", qty, symbol, side)
 		return nil
 	}
-	if err := mr.client.SubmitMarketOrder(symbol, qty, side); err != nil {
+	if _, err := mr.client.SubmitMarketOrder(symbol, qty, side); err != nil {
 		fmt.Printf("Order of | %d %s %s | did not go through.\n", qty, symbol, side)
 		return err
 	}

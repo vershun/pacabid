@@ -22,10 +22,9 @@ const (
 
 // Order describes an execution option on a market.
 type Order struct {
-	Quantity     int
-	Side         Side
-	StrategyName string
-	Symbol       string
+	Quantity int
+	Side     Side
+	Symbol   string
 }
 
 type Position struct {
