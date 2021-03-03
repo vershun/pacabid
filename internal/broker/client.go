@@ -1,15 +1,21 @@
 package broker
 
 import (
+	"errors"
 	"time"
 
 	"pacabid/internal/stock"
 )
 
+var (
+	ErrPositionDoesNotExist = errors.New("position does not exist")
+)
+
 type Account struct {
-	ID          string
-	BuyingPower float64
-	Cash        float64
+	ID             string
+	BuyingPower    float64
+	Cash           float64
+	PortfolioValue float64
 }
 
 type Client interface {

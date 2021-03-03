@@ -3,6 +3,7 @@ package strategy
 import (
 	"fmt"
 	"log"
+	"os"
 	"pacabid/internal/broker"
 	"pacabid/internal/stock"
 	"time"
@@ -15,10 +16,19 @@ type MeanReversion struct {
 	targetSymbol string
 
 	lastOrder string
+	closeLog  *log.Logger
 }
 
 func NewMeanReversion(symbol string, numBars int) *MeanReversion {
+	ln := fmt.Sprintf("history/%s.log", time.Now().Format("2006-01-02"))
+	f, err := os.OpenFile(ln, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	if err != nil {
+		panic(err)
+	}
+	log.SetFlags(0)
+	l := log.New(f, "", log.Ltime)
 	return &MeanReversion{
+		closeLog:     l,
 		targetSymbol: symbol,
 		numBars:      numBars,
 	}
@@ -35,6 +45,9 @@ func (mr *MeanReversion) Run(quit chan struct{}) error {
 	}
 	t := time.NewTicker(time.Minute)
 	defer t.Stop()
+	if err := mr.update(); err != nil {
+		return err
+	}
 	for {
 		select {
 		case <-quit:
@@ -70,7 +83,9 @@ func (mr *MeanReversion) update() error {
 	positionVal := 0.0
 	position, err := mr.client.GetPosition(mr.targetSymbol)
 	if err != nil {
-		return err
+		if err != broker.ErrPositionDoesNotExist {
+			return fmt.Errorf("failed to get position for %s: %s", mr.targetSymbol, err)
+		}
 	}
 	if position != nil {
 		positionCount = position.Quantity
@@ -82,6 +97,12 @@ func (mr *MeanReversion) update() error {
 	}
 	meanPrice /= float64(mr.numBars)
 	curPrice := bars[len(bars)-1].Close
+	if curPrice <= .001 {
+		log.Println("ERROR IN CURRENT PRICE!! SET TO 0!")
+		return nil
+	}
+	mr.closeLog.Printf("%f", curPrice)
+	log.Printf("Mean price: %f, current price: %f.", meanPrice, curPrice)
 
 	if curPrice > meanPrice {
 		// We're above the mean! Sell if we have any.
@@ -95,17 +116,12 @@ func (mr *MeanReversion) update() error {
 		if err != nil {
 			return err
 		}
-		positions, err := mr.client.GetPositions()
-		if err != nil {
-			return err
-		}
-		var portfolioVal float64
-		for _, p := range positions {
-			portfolioVal += p.MarketValue
-		}
 		portfolioShare := (meanPrice - curPrice) / curPrice * 200
-		targetPositionVal := portfolioVal * portfolioShare
+		log.Printf("Portfolio %f to stock.\n", portfolioShare)
+		targetPositionVal := acct.PortfolioValue * portfolioShare
 		amountToAdd := targetPositionVal - positionVal
+
+		log.Printf("Adding %f to stock.\n", amountToAdd)
 
 		if amountToAdd > 0 {
 			if amountToAdd > acct.BuyingPower {

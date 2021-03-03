@@ -19,7 +19,7 @@ type pacabid struct {
 
 func main() {
 	client := broker.NewAlpaca()
-	strat := strategy.NewMeanReversion("TSLA", 25)
+	strat := strategy.NewMeanReversion("T", 25)
 	strat.Prepare(0, client)
 	quit := make(chan struct{})
 	var wg sync.WaitGroup

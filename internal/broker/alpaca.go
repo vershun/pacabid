@@ -106,6 +106,9 @@ func (a *alpaca) GetPositions() ([]*stock.Position, error) {
 func (a *alpaca) GetPosition(symbol string) (*stock.Position, error) {
 	p, err := a.client.GetPosition(symbol)
 	if err != nil {
+		if err.Error() == ErrPositionDoesNotExist.Error() {
+			return nil, ErrPositionDoesNotExist
+		}
 		return nil, err
 	}
 	return toPosition(p), nil
@@ -133,6 +136,7 @@ func (a *alpaca) GetAccount() (*Account, error) {
 	var acct Account
 	acct.BuyingPower, _ = alpAcct.BuyingPower.Float64()
 	acct.Cash, _ = alpAcct.Cash.Float64()
+	acct.PortfolioValue, _ = alpAcct.PortfolioValue.Float64()
 	acct.ID = alpAcct.ID
 	return &acct, nil
 }
