@@ -54,7 +54,8 @@ func (mr *MeanReversion) Run(quit chan struct{}) error {
 			return nil
 		case <-t.C:
 			if err := mr.update(); err != nil {
-				return err
+				fmt.Fprintln(os.Stderr, "ERROR: PANIC: ", err)
+				//return err
 			}
 		}
 	}
