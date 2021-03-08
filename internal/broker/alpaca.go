@@ -2,12 +2,14 @@ package broker
 
 import (
 	"fmt"
-	"pacabid/internal/stock"
 	"time"
 
 	alp "github.com/alpacahq/alpaca-trade-api-go/alpaca"
 	"github.com/alpacahq/alpaca-trade-api-go/common"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/shopspring/decimal"
+
+	"pacabid/internal/stock"
 )
 
 type alpaca struct {
@@ -84,6 +86,14 @@ func (a *alpaca) GetSymbolBars(symbol string, numMinutes int) ([]*stock.Bar, err
 	if err != nil {
 		return nil, err
 	}
+
+	// FIXME: Why are some of the closes coming up 0?
+	cur := alpBars[len(alpBars)-1]
+	if cur.Close < .001 {
+		fmt.Println("DIVIDED BY 0!")
+		spew.Dump(cur)
+	}
+
 	var bars []*stock.Bar
 	for _, b := range alpBars {
 		bars = append(bars, toBar(&b))
